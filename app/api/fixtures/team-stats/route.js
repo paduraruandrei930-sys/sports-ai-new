@@ -14,6 +14,7 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url);
     const team = searchParams.get("team");
+    const season = searchParams.get("season") || String(new Date().getFullYear());
 
     if (!team || !/^\d+$/.test(team)) {
       return NextResponse.json(
@@ -23,7 +24,7 @@ export async function GET(request) {
     }
 
     const response = await fetch(
-      `https://v3.football.api-sports.io/fixtures?team=${team}&last=5`,
+      `https://v3.football.api-sports.io/fixtures?team=${team}&season=${season}`,
       {
         headers: {
           "x-apisports-key": apiKey
@@ -34,22 +35,35 @@ export async function GET(request) {
 
     const data = await response.json();
 
-    if (!response.ok || (data.errors && Object.keys(data.errors).length > 0)) {
+    if (!response.ok || Object.keys(data.errors || {}).length > 0) {
       return NextResponse.json(
-        { error: "API-ul nu a returnat statisticile.", details: data.errors },
+        { error: "Eroare API", details: data.errors },
         { status: 502 }
       );
     }
 
+    const completed = (data.response || [])
+      .filter(match =>
+        ["FT", "AET", "PEN"].includes(match.fixture.status.short)
+      )
+      .sort((a, b) =>
+        new Date(b.fixture.date) - new Date(a.fixture.date)
+      )
+      .slice(0, 5);
+
     return NextResponse.json({
-      matches: data.response || [],
-      count: data.results || 0
+      team: Number(team),
+      season: Number(season),
+      matches: completed,
+      count: completed.length
     });
 
   } catch (error) {
     return NextResponse.json(
-      { error: "Eroare la preluarea meciurilor echipei." },
+      { error: "Nu s-au putut prelua meciurile echipei." },
       { status: 500 }
     );
   }
+}
+
 }
